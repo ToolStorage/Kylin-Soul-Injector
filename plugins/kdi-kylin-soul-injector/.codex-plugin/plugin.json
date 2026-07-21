@@ -1,0 +1,32 @@
+{
+  "name": "kdi-kylin-soul-injector",
+  "version": "1.0.0",
+  "description": "Build and verify lifecycle-safe, layered Unity game code with Kylin DI.",
+  "author": {
+    "name": "ToolStorage",
+    "url": "https://github.com/ToolStorage"
+  },
+  "homepage": "https://github.com/ToolStorage/Kylin-Soul-Injector",
+  "repository": "https://github.com/ToolStorage/Kylin-Soul-Injector",
+  "license": "MIT",
+  "keywords": [
+    "unity",
+    "kdi",
+    "dependency-injection",
+    "layered-architecture",
+    "lifecycle"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "KylinSoulInjector",
+    "shortDescription": "KDI architecture and lifecycle guardrails",
+    "longDescription": "Create and review Unity gameplay code with explicit KDI layers, child scopes, object ownership, deterministic cleanup, and fast structural verification.",
+    "developerName": "ToolStorage",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": "Use KylinSoulInjector to design and verify this KDI-based Unity feature."
+  }
+}

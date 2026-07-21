@@ -1,0 +1,20 @@
+{
+  "name": "kylin",
+  "interface": {
+    "displayName": "Kylin"
+  },
+  "plugins": [
+    {
+      "name": "kdi-kylin-soul-injector",
+      "source": {
+        "source": "local",
+        "path": "./plugins/kdi-kylin-soul-injector"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
