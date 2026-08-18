@@ -1,6 +1,6 @@
 {
   "name": "kdi-kylin-soul-injector",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Build and verify lifecycle-safe, layered Unity game code with Kylin DI.",
   "author": {
     "name": "ToolStorage",
@@ -27,6 +27,8 @@
       "Read",
       "Write"
     ],
-    "defaultPrompt": "Use KylinSoulInjector to design and verify this KDI-based Unity feature."
+    "defaultPrompt": [
+      "Use KylinSoulInjector to design and verify this KDI-based Unity feature."
+    ]
   }
 }

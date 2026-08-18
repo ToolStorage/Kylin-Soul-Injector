@@ -4,8 +4,9 @@ Standalone Codex skill and plugin for Unity projects built with Kylin DI and KDI
 
 Baseline compatibility:
 
-- `com.kylin.di` 1.4.0
-- `com.kylin.di.layered` 1.1.2
+- KylinSoulInjector 2.0.0
+- `com.kylin.di` 2.0.0
+- `com.kylin.di.layered` 2.0.0 (analyzer contract `2.0-preview.1`)
 - Unity 6000.0 or newer
 - Python 3 for the optional read-only architecture audit
 

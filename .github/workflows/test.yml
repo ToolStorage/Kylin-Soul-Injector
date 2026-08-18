@@ -1,0 +1,22 @@
+name: Test architecture audit
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: '3.11'
+
+      - name: Run contract and audit regression tests
+        run: >-
+          python -m unittest discover
+          -s plugins/kdi-kylin-soul-injector/skills/kdi-kylin-soul-injector/tests
+          -p "test_*.py"

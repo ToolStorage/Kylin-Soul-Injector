@@ -1,0 +1,9 @@
+{
+  "contract_version": "2.0-preview.1",
+  "boundary_globs": [
+    "Assets/Game/Composition/**",
+    "Packages/com.example.game/Runtime/Bootstrap.cs"
+  ],
+  "framework_namespace_prefixes": ["Kylin.DI"],
+  "fail_on": "never"
+}

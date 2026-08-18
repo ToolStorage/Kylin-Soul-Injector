@@ -142,11 +142,11 @@ Keep layered dependency edges as `[Inject]` fields. Use `FromInstance` or `FromF
 
 ```csharp
 builder.Bind<FeatureConfig>()
-    .FromFactory(_ => new FeatureConfig(serializedValue))
+    .FromFactory(() => new FeatureConfig(serializedValue))
     .AsScoped();
 ```
 
-Do not call `scope.Resolve<T>()` inside the factory to assemble a layered service. The object returned by the factory can still implement `IInjectable`, and KDI will inject its visible fields.
+The factory is zero-argument. Capture only the external value; do not capture a scope and call `Resolve<T>()` to assemble a layered service. The object returned by the factory can still implement `IInjectable`, and KDI will inject its visible fields.
 
 ## EntryPoints
 

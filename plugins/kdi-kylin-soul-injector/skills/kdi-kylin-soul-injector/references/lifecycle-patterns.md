@@ -1,5 +1,7 @@
 # Scope, creation, and teardown patterns
 
+These patterns assume the verified KDI 2.0 runtime contract. Re-check the installed source before applying them to another version.
+
 ## Select the owner first
 
 ```text
@@ -16,9 +18,12 @@ Create only boundaries the game actually has. Put a dependency in the shortest S
 | App-wide platform/config service | Root Singleton |
 | Session/scene/match state and services | Matching child Scoped |
 | Stateful or disposable ViewModel | View/screen child Scoped |
-| Stateless disposable-free helper | Transient only when repeated instances are required |
+| Repeated helper with no state or cleanup | Transient; KDI does not retain it when it is neither injectable nor disposable |
+| Injectable or disposable transient | Short child Scope; KDI retains its lease/resource until that Scope closes |
+| Unity object with independent destruction | External-owned GameObject plus explicit injection; transient Unity services are rejected |
 | Variable-count domain entity | Scoped Domain owner tracks plain entities |
-| Injected GameObject | Explicit View/scope handle plus Unity Transform parent |
+| `IInstantiator` clone | Calling KDI Scope owns it and deactivates/destroys it at shutdown |
+| External GameObject passed to `InjectGameObject` | Explicit Unity owner destroys/pools it; KDI Scope owns only its injection lease |
 
 ## Programmatic child Scope
 
@@ -32,7 +37,9 @@ public sealed class BattleScopeHandle : System.IDisposable
     public BattleScopeHandle(IScope parent, BattleSeed seed)
     {
         var builder = new ScopeBuilder();
-        builder.Bind<BattleData>().FromInstance(new BattleData(seed));
+        builder.Bind<BattleData>()
+            .FromFactory(() => new BattleData(seed))
+            .AsScoped();
         builder.Bind<IBattleDomain>().To<BattleDomain>().AsScoped();
         builder.Bind<IBattleApplication>().To<BattleApplication>().AsScoped();
 
@@ -50,13 +57,43 @@ public sealed class BattleScopeHandle : System.IDisposable
 }
 ```
 
-The boundary owner creates and disposes this handle. Disposing it leaves `parent` live. Disposing `parent` also cascades to this child. Never expose `_scope` or store it in a layered service.
+The zero-argument factory captures only the external creation value. It does not capture a resolver or Resolve layered dependencies; KDI field-injects those after creation. Because `FromFactory` is container-created, KDI owns an `IDisposable` result. Disposing the child leaves `parent` live, while disposing `parent` cascades to the child.
 
-Because baseline Scope construction activates instance registrations and EntryPoints before returning, keep their setup deterministic and free of irreversible external side effects.
+Scope construction observes every `FromInstance` identity before any activation, then eagerly injects those registrations and activates EntryPoints before returning. Binding order therefore cannot let a factory claim an explicitly external object. Keep this work deterministic. KDI rejects building another Scope, disposing a Scope, or calling `Instantiate` from inside a factory or `PostInject()`; `Instantiate` must begin after the owning graph has committed.
+
+## External instance transfer is not ownership transfer
+
+`FromInstance` and public direct injection make an identity injection-managed, but do not transfer its `IDisposable` ownership. That external identity classification remains after lease revocation, so a later factory cannot claim it:
+
+```csharp
+public sealed class ImportedSessionHandle : System.IDisposable
+{
+    private IScope _scope;
+    private ExternalSessionState _state;
+
+    public ImportedSessionHandle(IScope parent, ExternalSessionState state)
+    {
+        _state = state;
+        var builder = new ScopeBuilder();
+        builder.Bind<ExternalSessionState>().FromInstance(state);
+        _scope = builder.Build(parent, nameof(ImportedSessionHandle));
+    }
+
+    public void Dispose()
+    {
+        _scope?.Dispose(); // PreUninject and injected-field restoration
+        _scope = null;
+        _state?.Dispose(); // the supplier/handle still owns the object
+        _state = null;
+    }
+}
+```
+
+Do not dispose an imported instance from both the supplying owner and a consumer. If the Scope should own creation and disposal, use `To`, `ToSelf`, or `FromFactory` instead.
 
 ## Variable-count plain C# objects
 
-The baseline `IInstantiator` cannot create/inject arbitrary C# objects. Keep them as plain objects owned by one Scoped service:
+`IInstantiator` creates GameObjects, not arbitrary C# objects. Keep variable-count entities as plain objects owned by one Scoped service:
 
 ```csharp
 public sealed class ProjectileDomain : IProjectileDomain, System.IDisposable
@@ -81,19 +118,17 @@ public sealed class ProjectileDomain : IProjectileDomain, System.IDisposable
     public void Dispose()
     {
         for (var i = _projectiles.Count - 1; i >= 0; i--)
-        {
             _projectiles[i].Dispose();
-        }
         _projectiles.Clear();
     }
 }
 ```
 
-Pass required values into the plain entity. Do not pass a resolver. If every entity needs its own injected graph, create a child Scope per aggregate at a composition boundary and dispose its handle when the aggregate ends.
+Pass required values into the plain entity. Do not pass a resolver. If every entity needs an injected graph, create a child Scope per aggregate at a composition boundary and close it when the aggregate ends; account for the retained activation ledger before doing this at high volume.
 
-## Injected Unity View lifetime
+## Scope-owned instantiated Unity View lifetime
 
-KDI injection and Unity ownership are separate. Pair a child Scope with the View root explicitly:
+An `IInstantiator` clone belongs to the concrete KDI Scope that created it. Keep that Scope as the teardown handle:
 
 ```csharp
 public sealed class ScopedViewHandle : System.IDisposable
@@ -110,56 +145,64 @@ public sealed class ScopedViewHandle : System.IDisposable
         var builder = new ScopeBuilder();
         configure(builder);
         _scope = builder.Build(parent, nameof(ScopedViewHandle));
-
-        var instantiator = _scope.Resolve<IInstantiator>();
-        _viewRoot = instantiator.Instantiate(prefab, unityParent);
+        _viewRoot = _scope.Resolve<IInstantiator>().Instantiate(prefab, unityParent);
     }
 
     public void Dispose()
     {
-        if (_viewRoot != null)
-        {
-            _viewRoot.SetActive(false);
-            Object.Destroy(_viewRoot);
-            _viewRoot = null;
-        }
-
+        // Deactivates the owned hierarchy, revokes injection, and destroys the clone.
         _scope?.Dispose();
         _scope = null;
+        _viewRoot = null;
     }
 }
 ```
 
-- Keep this handle at a composition/View boundary; do not register it as a business service.
-- Deactivate the View first so `DIBehaviour.OnDisable` removes subscriptions before its services are disposed.
-- Pass a Transform owned by the same Unity lifetime boundary. Also retain the handle; parenting alone does not make `Scope.Dispose()` destroy the object.
-- Do not use a prefab root containing `LifetimeScope` with this pattern. Parent injection stops at that boundary, and the nested Scope must initialize through its own explicit hierarchy.
-- Direct `Object.Destroy` is required for explicit cleanup in baseline KDI because `IInstantiator` has no release API.
+- Keep the handle at a composition/View boundary; do not register it as a business service.
+- Build/resolve the graph first, then call `Instantiate`; a factory, `PostInject()`, or any other in-progress activation is rejected.
+- Scope disposal deactivates every owned hierarchy first, so `DIBehaviour` active-interval cleanup and `OnDisable` can still see injected fields. It then revokes injection in reverse activation order and destroys the clone.
+- Destroying the clone early is also safe: its hidden `InjectionLifetimeHost` releases Component leases and the owned-object record, so later Scope disposal does not clean it twice.
+- Do not pool an `IInstantiator` clone across Scope shutdown. There is no per-object release API and the Scope will destroy it. For pooling, the pool must create/own the object; inject it through a short concrete Scope and dispose that Scope before return.
+- A prefab containing `LifetimeScope` is supported. KDI prepares parentless prefab scopes as runtime children of the nearest prefab scope or calling Scope before activation. Parent Scope disposal cascades into those scopes before destroying the Scope-owned prefab clone.
+- When the prefab's own `LifetimeScope` is the intended feature boundary, prefer configuring that scope over adding a redundant wrapper child Scope.
 
-## Subscriptions and callbacks
+## Injection cleanup and subscriptions
 
-For a Scoped C# service:
+For a KDI-created Scoped C# service, split cleanup by what needs injected fields:
 
 ```csharp
-private readonly CompositeDisposable _subscriptions = new();
+private CompositeDisposable _subscriptions = new();
 
 public void PostInject()
 {
     _data.State.Subscribe(OnStateChanged).AddTo(_subscriptions);
+    _externalSource.Changed += OnExternalChanged;
+}
+
+public void PreUninject()
+{
+    _subscriptions.Dispose();
+    _subscriptions = new CompositeDisposable();
+    _externalSource.Changed -= OnExternalChanged;
 }
 
 public void Dispose()
 {
-    _subscriptions.Dispose();
-    _externalSource.Changed -= OnExternalChanged;
+    _ownedNativeHandle.Dispose();
 }
 ```
 
-For `DIBehaviour`, add subscriptions to `_cd`; KDI resets it on every `OnDisable`. Explicitly remove UnityEvent, static, native, or third-party callbacks that are not represented by an `IDisposable` subscription.
+Implement `IPostInjectable`, `IPreUninjectable`, and `IDisposable` as applicable. `PreUninject` runs before KDI calls `Dispose()` and before fields are restored. It may run after a partially failed `PostInject`, so every operation must tolerate partial setup and repeated cleanup attempts.
+
+For `DIBehaviour`:
+
+- Put active-only subscriptions in `_cd`; it is disposed on each injected disable and recreated before the next `OnInjectedEnable()`.
+- Put resources that must survive disable/enable but end at injection revocation in `InjectionDisposables`.
+- Use `OnInjectedEnable`, `OnInjectedDisable`, and `OnBeforeUninject`. Redeclaring parameterless `OnEnable` or `OnDisable` is rejected during injection.
 
 ## Async lifetime guard
 
-KDI does not cancel work. Own cancellation in the same Scoped service:
+KDI revokes injection and calls owned `Dispose()`, but it does not cancel work by itself. Own cancellation in the same Scoped service:
 
 ```csharp
 private readonly System.Threading.CancellationTokenSource _lifetime = new();
@@ -183,7 +226,7 @@ public void Dispose()
 }
 ```
 
-Check the guard after every external await and before Data, callback, or Unity side effects. Make Dispose idempotent and non-throwing because baseline Scope suppresses disposal exceptions.
+Check the guard after every external await and before Data, callback, or Unity side effects. KDI 2.0 cleans activation records in reverse order and continues after cleanup errors, logging an aggregate; do not use that as permission for throwing cleanup code. Keep tightly order-dependent resources under one explicit owner so graph changes cannot silently alter their relative activation order.
 
 ## Rebuild invariant
 
@@ -194,4 +237,4 @@ build child A -> use A -> dispose A -> parent still works
 -> build child B -> use B -> dispose parent -> B is inert/disposed
 ```
 
-No object from A may remain in parent fields, static state, event subscribers, update loops, Unity hierarchy, or async continuations.
+Also verify that injected fields from A were restored, `PreUninject` ran once, KDI-created transients were cleaned, imported `FromInstance` objects were not disposed, Scope-owned instantiated clones were destroyed, and externally destroyed Components released their leases before parent shutdown. No object from A may remain in parent fields, static state, event subscribers, update loops, Unity hierarchy, or async continuations.

@@ -1,0 +1,42 @@
+{
+  "tool_version": "2.0.0",
+  "contract_version": "2.0-preview.1",
+  "authority": "ADVISORY",
+  "states": {
+    "ADVISORY": "The textual evidence is sufficiently resolved to recommend review, but Roslyn/compiler/runtime evidence decides correctness.",
+    "UNKNOWN": "Namespace, alias, partial declaration, scan coverage, or semantic binding could not be resolved safely; no violation is asserted."
+  },
+  "confidence": ["HIGH", "MEDIUM", "LOW", "UNKNOWN"],
+  "default_exit_policy": "never",
+  "authoritative_diagnostics": ["KDI001", "KDI002", "KDI003"],
+  "diagnostics": {
+    "kdi_usage_unknown": {"id": "KSI001", "meaning": "KDI usage was not established in the selected scan paths."},
+    "multiple_layers": {"id": "KSI002", "meaning": "A declaration resolves to multiple KDI layers."},
+    "self_injection": {"id": "KSI003", "meaning": "An object attempts to inject itself."},
+    "locator_outside_boundary": {"id": "KSI004", "meaning": "Resolver or root-scope lookup appears outside an explicit composition boundary."},
+    "resolver_injection": {"id": "KSI005", "meaning": "Resolver authority is injected into a consumer."},
+    "non_injectable_host": {"id": "KSI006", "meaning": "A host declares injected fields without an IInjectable marker."},
+    "layer_violation": {"id": "KSI007", "meaning": "A field-injection edge is same-layer or upward."},
+    "missing_lifetime": {"id": "KSI008", "meaning": "A binding has no lifetime or FromInstance terminator."},
+    "transient_entry_point": {"id": "KSI009", "meaning": "A binding combines transient lifetime with entry-point activation."},
+    "transient_update_loop": {"id": "KSI010", "meaning": "A transient update-loop implementation is rejected by KDI 2.0."},
+    "direct_managed_construction": {"id": "KSI011", "meaning": "Direct construction of a KDI-managed type appears outside a composition boundary."},
+    "transient_unity_object": {"id": "KSI012", "meaning": "A transient UnityEngine.Object implementation is rejected by KDI 2.0."},
+    "layer_identity_unknown": {"id": "KSI101", "meaning": "KDI Layered marker identity was not established."},
+    "inject_host_unknown": {"id": "KSI102", "meaning": "The host declaration for an injected field could not be determined."},
+    "injectable_status_unknown": {"id": "KSI103", "meaning": "The host's IInjectable status could not be proved."},
+    "unclassified_local_contract": {"id": "KSI104", "meaning": "An injected local contract has no KDI layer classification."},
+    "factory_resolve": {"id": "KSI105", "meaning": "A zero-argument FromFactory captures a resolver and hides analyzer-visible edges."},
+    "direct_object_instantiate": {"id": "KSI106", "meaning": "Direct Object.Instantiate may bypass injectable hierarchy handling."},
+    "semantic_resolution_unknown": {"id": "KSI107", "meaning": "Textual type or layer resolution is ambiguous or incomplete."},
+    "heuristic_boundary_unknown": {"id": "KSI108", "meaning": "Composition-boundary authority is inferred only from a filename."},
+    "retained_transient": {"id": "KSI109", "meaning": "A valid injectable or disposable transient is retained until Scope shutdown."},
+    "externally_owned_instance": {"id": "KSI110", "meaning": "A disposable FromInstance registration remains externally owned."}
+  },
+  "kdi_2_lifecycle_signals": {
+    "KSI010": "A transient update-loop implementation is rejected by the KDI runtime.",
+    "KSI012": "A transient UnityEngine.Object implementation is rejected by the KDI runtime.",
+    "KSI109": "An injectable and/or disposable transient is valid but retained by its Scope until shutdown.",
+    "KSI110": "A disposable FromInstance registration remains externally owned and needs a proven supplier teardown."
+  }
+}
